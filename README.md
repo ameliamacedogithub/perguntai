@@ -4,7 +4,7 @@ Trabalho final de conclusão de curso da especialização em Inteligência Artif
 Os comandos a seguir estão prontos para serem executados no Google Colab. Para executar localmente faça os devidos ajustes:
 
 1. Baixar os códigos python do github:
-   ```python
+   ```text
     !git clone https://github.com/ameliamacedogithub/perguntai.git
    ```
 
@@ -15,13 +15,13 @@ Os comandos a seguir estão prontos para serem executados no Google Colab. Para 
  
 
 3. Instalação das bibliotecas através do requirements.txt. Ao finalizar reinicie a sessão:
-   ```python
+   ```text
    !pip install -r requirements.txt
    ```
 
 
 7. Ajuste necessário para resolução de problemas de conflitos de versões das bibliotecas:
-   ```python
+   ```text
    # 1. Força a desinstalação de tudo relacionado a langchain para garantir limpeza
    !pip uninstall -y langchain langchain-classic langchain-community langchain-core langchain-openai
 
@@ -33,7 +33,7 @@ Aqui temos duas opções, executar a interface ou realizar o benchmarking
 
 # PerguntAI – Interface
 
-Recupera a chave da OpenAI e Ngrok que cria um tunel para interface Streamlit rodar. O ngrok abre uma página, clique em Visit site. O túnel só é necessário se estiver rodando no Google Colab. Caso contrário !streamlit run interface.py.
+Recupera a chave da OpenAI e Ngrok que cria um tunel para interface Streamlit rodar. O ngrok abre uma nova aba no seu navegador, clique em Visit site. O túnel só é necessário se estiver rodando no Google Colab. Caso contrário !streamlit run interface.py.
 
 ```python
 import os
@@ -77,7 +77,7 @@ print("=========================================================================
 
 
 1.Execute o runner para iniciar o benchmark
-```python
+```text
 !python runner_benchmark_configs.py
 ```
 
@@ -86,8 +86,8 @@ Lê o CSV consolidado gerado pelo runner e cria gráficos para:
 
 Comparação entre tecnologias
 Comparação entre parâmetros (chunk_size, chunk_overlap, k)
-Pré-requisito: ter um arquivo benchmark_consolidado.csv, ou seja ter rodado `!python runner_benchmark_configs.py`
+Pré-requisito: ter um arquivo benchmark_consolidado.csv, ou seja, ter rodado `!python runner_benchmark_configs.py`
 
-```python
-!python analise.py
+```text
+%run analise.py
 ```

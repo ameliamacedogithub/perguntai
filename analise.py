@@ -14,7 +14,6 @@ nome_arquivo = "benchmark_consolidado.csv"
 
 CSV_PATH = os.path.join(caminho_atual, pasta_intermediaria, nome_arquivo)
 
-print(CSV_PATH)
 
 # Tenta ler o CSV
 try:
@@ -93,7 +92,7 @@ df_ok = df_valid[df_valid["erro"] == 0].copy()
 # AGREGAÇÕES (Correção: Adicionamos 'n_ok' aqui para uso interno, mas não exibiremos)
 # ==============================================================================
 
-# A) Por tecnologia
+# A) Por abordagem
 agg_ok_tec = (
     df_ok.groupby("tecnologia")
     .agg(
@@ -104,7 +103,7 @@ agg_ok_tec = (
     .reset_index()
 )
 
-# B) Por tipo_item × tecnologia
+# B) Por tipo_item × abordagem
 agg_ok_tipo_tec = (
     df_ok.groupby(["tipo_item", "tecnologia"])
     .agg(
@@ -126,10 +125,113 @@ agg_ok_cfg = (
     .reset_index()
 )
 
+#
+
+# Abordagens esperadas na ordem desejada
+TEC_ORDER = ["LLM", "RAG_Tradicional", "Advanced RAG"]
+
+def pivot_wide_tipo_tecnologia(value_col):
+    """
+    Cria tabela wide:
+      index = tipo_item
+      columns = tecnologia (LLM, RAG_Tradicional, Advanced RAG)
+      values = value_col (rougeL_mean ou bert_f1_mean)
+    """
+    # Filtra apenas tecnologias de interesse (se existir)
+    sub = agg_ok_tipo_tec.copy()
+    sub = sub[sub["tecnologia"].isin(TEC_ORDER)].copy()
+
+    wide = sub.pivot_table(
+        index="tipo_item",
+        columns="tecnologia",
+        values=value_col,
+        aggfunc="mean"
+    )
+
+    # Garante colunas na ordem (mesmo que falte alguma)
+    for t in TEC_ORDER:
+        if t not in wide.columns:
+            wide[t] = np.nan
+    wide = wide[TEC_ORDER]
+
+    # Ordena por média (opcional) para ficar mais legível
+    wide = wide.loc[wide.mean(axis=1, skipna=True).sort_values(ascending=False).index]
+
+    return wide
+
+def style_bold_rowmax(df_wide, decimals=6):
+    """
+    Destaca em negrito o maior valor de cada linha (ignorando NaN).
+    Para uso em notebook (display com Styler).
+    """
+    def _bold_row_max(row):
+        if row.dropna().empty:
+            return [""] * len(row)
+        m = row.max(skipna=True)
+        return ["font-weight: bold" if pd.notna(v) and v == m else "" for v in row]
+
+    return (
+        df_wide.style
+        .apply(_bold_row_max, axis=1)
+        .format(lambda x: f"{x:.{decimals}f}" if pd.notna(x) else "--")
+    )
+def montar_label_config(df):
+    # Cria um label estável e legível (e ordenável)
+    return (
+        "cs" + df["chunk_size"].astype(int).astype(str)
+        + "_co" + df["chunk_overlap"].astype(int).astype(str)
+        + "_k" + df["k"].astype(int).astype(str)
+    )
+
+def pivot_config_wide(df_cfg, metric_col):
+    """
+    df_cfg deve ter: tecnologia, chunk_size, chunk_overlap, k, metric_col
+    Retorna: index=config_label, cols=tecnologia, values=metric
+    """
+    sub = df_cfg.copy()
+
+    
+
+    sub["config_label"] = montar_label_config(sub)
+
+    wide = sub.pivot_table(
+        index=["chunk_size", "chunk_overlap", "k", "config_label"],
+        columns="tecnologia",
+        values=metric_col,
+        aggfunc="mean"
+    )
+
+    # garante colunas na ordem e coloca -- quando não existir
+    for t in TEC_ORDER:
+        if t not in wide.columns:
+            wide[t] = np.nan
+    wide = wide[TEC_ORDER]
+
+    # ordena pelas combinações (chunk_size, overlap, k)
+    wide = wide.sort_index(level=[0, 1, 2], ascending=[True, True, True])
+
+    return wide.reset_index().set_index("config_label")[TEC_ORDER]
+
+def style_bold_rowmax(df_wide, decimals=6):
+    def _bold_row_max(row):
+        s = row.dropna()
+        if s.empty:
+            return [""] * len(row)
+        m = s.max()
+        return ["font-weight: bold" if pd.notna(v) and v == m else "" for v in row]
+
+    return (
+        df_wide.style
+        .apply(_bold_row_max, axis=1)
+        .format(lambda x: f"{x:.{decimals}f}" if pd.notna(x) else "--")
+    )
+
+
+
 # -----------------------
 # 1) Tabelas principais
 # -----------------------
-print("\n=== A) Por tecnologia (Ordenado por ROUGE-L) ===")
+print("\n=== A) Por abordagem (Ordenado por ROUGE-L) ===")
 # Exibe sem mostrar a coluna n_ok
 display(agg_ok_tec[["tecnologia", "rougeL_mean", "bert_f1_mean"]].sort_values("rougeL_mean", ascending=False))
 
@@ -150,10 +252,10 @@ if len(agg_ok_tec) > 0:
                  "BERTScore F1 (média)", rotation=30)
 
 # -----------------------
-# 3) Melhor tecnologia por tipo_item
+# 3) Melhor abordagem por tipo_item
 # -----------------------
 def melhor_por_tipo_ok(metric_col):
-    """Retorna a melhor tecnologia para cada tipo de documento."""
+    """Retorna a melhor abordagem para cada tipo de documento."""
     # Remove NaNs da métrica
     sub = agg_ok_tipo_tec.dropna(subset=[metric_col]).copy()
     if sub.empty:
@@ -169,16 +271,16 @@ def melhor_por_tipo_ok(metric_col):
     # Seleciona APENAS as colunas desejadas (SEM n_ok)
     return best[["tipo_item", "tecnologia", metric_col]]
 
-print("\n🏆 A) Melhor tecnologia por tipo_item — ROUGE-L")
-best_rouge = melhor_por_tipo_ok("rougeL_mean")
-if best_rouge is not None:
-    display(best_rouge)
+print("\n=== Tipo de pergunta x Abordagem — ROUGE-L ===")
+wide_tipo_rouge = pivot_wide_tipo_tecnologia("rougeL_mean")
+display(style_bold_rowmax(wide_tipo_rouge, decimals=6))
 
 if has_non_nan(df_ok["bertscore_f1"]):
-    print("\n🏆 A) Melhor tecnologia por tipo_item — BERTScore F1")
-    best_bert = melhor_por_tipo_ok("bert_f1_mean")
-    if best_bert is not None:
-        display(best_bert)
+    print("\n=== Tipo de pergunta x Abordagem — BERTScore F1 ===")
+    wide_tipo_bert = pivot_wide_tipo_tecnologia("bert_f1_mean")
+    display(style_bold_rowmax(wide_tipo_bert, decimals=6))
+
+
 
 # -----------------------
 # 4) Heatmaps
@@ -248,16 +350,16 @@ def top_configs_por_metrica(metric_col, topn=10, min_n=5):
     cols_to_show = ["config_id", "tecnologia", "chunk_size", "chunk_overlap", "k", metric_col]
     return res[cols_to_show]
 
-print("\n🏅 TOP configs por ROUGE-L (min 5 execuções)")
-top_rouge = top_configs_por_metrica("rougeL_mean", topn=10, min_n=5)
-if top_rouge is not None:
-    display(top_rouge)
+# === TABELA wide por CONFIG (ROUGE-L)
+cfg_rouge_wide = pivot_config_wide(agg_ok_cfg, "rougeL_mean")
+print("\n=== Configurações x abordagem — ROUGE-L ===")
+display(style_bold_rowmax(cfg_rouge_wide, decimals=6))
 
+# === TABELA wide por CONFIG (BERTScore)
 if has_non_nan(df_ok["bertscore_f1"]):
-    print("\n🏅 TOP configs por BERTScore F1 (min 5 execuções)")
-    top_bert = top_configs_por_metrica("bert_f1_mean", topn=10, min_n=5)
-    if top_bert is not None:
-        display(top_bert)
+    cfg_bert_wide = pivot_config_wide(agg_ok_cfg, "bert_f1_mean")
+    print("\n=== Configurações x Abordagem — BERTScore F1 ===")
+    display(style_bold_rowmax(cfg_bert_wide, decimals=6))
 
 
 # =========================
